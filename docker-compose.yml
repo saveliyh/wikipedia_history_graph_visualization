@@ -1,0 +1,7 @@
+services:
+  skydb:
+    image: skytable/skytable:v0.8.4
+    ports:
+      - 2003:2003
+    volumes:
+      - ./skytable:/data
