@@ -16,7 +16,9 @@ async def get_page_data(**kwargs):
     elif "warnings" in response:
         print(response["warnings"])
     elif "query" in response:
-        return response["query"]["pages"].values()[0]
+        page = list(response["query"]["pages"].values())[0]
+        page.pop("ns", None)
+        return page
 
 
 async def get_links_from_page(**kwargs):
@@ -42,11 +44,12 @@ async def get_links_from_page(**kwargs):
             print(response["warnings"])
         elif "query" in response:
             for page in response["query"]["pages"].values():
-                connected_pages.append(page)
+                connected_pages.append(page["pageid"])
 
         if "continue" not in response:
             break
 
         last_continue = response["continue"]
         # TODO: add logging
+
     return connected_pages

@@ -4,4 +4,4 @@ services:
     ports:
       - 2003:2003
     volumes:
-      - ./skytable:/data
+      - ./skytable:/var/lib/skytable/data
