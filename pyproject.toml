@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "requests>=2.32.3",
+    "aiohttp>=3.11.13",
     "ruff>=0.9.7",
     "skytable-py>=0.1.3",
 ]

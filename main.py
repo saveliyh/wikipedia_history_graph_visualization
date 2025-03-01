@@ -8,7 +8,7 @@ from db import insert, init
 logging.basicConfig(
     level=logging.INFO,
     filename="log.log",
-    filemode="w",
+    filemode="a",
     format="%(asctime)s %(levelname)s %(message)s",
 )
 
@@ -25,20 +25,23 @@ async def main():
             db,
             "pages",
             "page",
-            {"id": "uint64", "title": "string", "connected": "list {type: uint64}"},
+            {"id": "uint64", "title": "binary", "connected": "list {type: uint64}"},
         )
         # start with Main Page
         current = 217225
+        # current = 8857668
         close_pages = set()
         checked_pages = set()
         while True:
 
-            pages = await get_links_from_page(pageids=current)
-            page = await get_page_data(pageids=current)
-            logging.info(f"Got page {page['pageid']} with title {page['title']}")
+            pages = asyncio.create_task(get_links_from_page(pageids=current))
+            page = asyncio.create_task(get_page_data(pageids=current))
+            pages = await pages
+            page = await page
             page["id"] = page.pop("pageid", None)
+
             page["connected"] = pages
-            waiting_insert = insert(db, "pages", "page", page)
+            waiting_insert = asyncio.create_task(insert(db, "pages", "page", page))
             checked_pages.add(current)
 
             if len(pages) == 0:
@@ -48,26 +51,60 @@ async def main():
                     break
                 else:
                     while current in checked_pages:
-                        current = choice(close_pages)
+                        current = close_pages.pop()
                         logging.info(f"choose {current} for BFS")
-                        close_pages.remove(current)
+                        if len(checked_pages) == 0:
+                            await waiting_insert
+                            logging.info("cannot find more connected pages")
+                            break
+
             elif len(close_pages) == 0:
                 while current in checked_pages:
                     current = choice(pages)
                     logging.info(f"choose {current} for DFS")
                     pages.remove(current)
+                    if len(pages) == 0:
+
+                        await waiting_insert
+                        logging.info("cannot find more connected pages")
+                        break
 
             elif random() < balance:
                 while current in checked_pages:
                     current = choice(pages)
                     logging.info(f"choose {current} for DFS")
                     pages.remove(current)
+                    if len(pages) == 0:
+                        if len(close_pages) == 0:
+                            await waiting_insert
+                            logging.info("cannot find more connected pages")
+                            break
+                        else:
+                            while current in checked_pages:
+                                current = close_pages.pop()
+                                logging.info(f"choose {current} for BFS")
+                                if len(close_pages) == 0:
+                                    await waiting_insert
+                                    logging.info("cannot find more connected pages")
+                                    break
 
             else:
                 while current in checked_pages:
-                    current = choice(close_pages)
+                    current = close_pages.pop()
                     logging.info(f"choose {current} for BFS")
-                    close_pages.remove(current)
+                    if len(pages) == 0:
+                        await waiting_insert
+                        logging.info("cannot find more connected pages")
+                        break
+                    else:
+                        while current in checked_pages:
+                            current = choice(pages)
+                            logging.info(f"choose {current} for DFS")
+                            pages.remove(current)
+                            if len(pages) == 0:
+                                await waiting_insert
+                                logging.info("cannot find more connected pages")
+                                break
 
             close_pages.update(pages)
             await waiting_insert
@@ -86,7 +123,6 @@ async def get():
         row = await db.run_simple_query(
             Query("""select * from pages.page where id = ?""", UInt(1))
         )
-        print(row.row().columns)
 
     except Exception as e:
         print("Failed with error", e)
