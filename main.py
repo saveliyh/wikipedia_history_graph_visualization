@@ -3,23 +3,22 @@ from random import choice, random
 import logging
 import asyncio
 from skytable_py import Config, Query, UInt
-from db import insert, init
+from db import insert, init, get_page
+from threading import Thread
 
 logging.basicConfig(
     level=logging.INFO,
     filename="log.log",
-    filemode="a",
+    filemode="w",
     format="%(asctime)s %(levelname)s %(message)s",
 )
 
 c = Config("root", "77a23dea-64f9-48", host="localhost", port=2003)
 
 
-async def main():
+async def insert_page(pages_list: list[tuple[int, dict]]):
     db = None
     try:
-        # probability to choose DFS otherwise BFS
-        balance = 0.7
         db = await c.connect()
         await init(
             db,
@@ -27,26 +26,61 @@ async def main():
             "page",
             {"id": "uint64", "title": "binary", "connected": "list {type: uint64}"},
         )
+        while True:
+            if len(pages_list) == 0:
+                await asyncio.sleep(30)
+                continue
+            current, pages = pages_list.pop()
+            if current == -1:
+                break
+            page = asyncio.create_task(get_page_data(pageids=current))
+            page = await page
+            page["id"] = page.pop("pageid", None)
+
+            page["connected"] = pages
+            await insert(db, "pages", "page", page)
+    except Exception as e:
+        logging.exception(f"Failed in input thread with error {e}")
+    finally:
+        if db:
+            await db.close()
+
+
+async def parse_pages(pages_list: list[tuple[int, dict]]):
+    db = None
+    try:
+        db = await c.connect()
+        await init(
+            db,
+            "pages",
+            "page",
+            {"id": "uint64", "title": "binary", "connected": "list {type: uint64}"},
+        )
+        balance = 0.7
         # start with Main Page
         current = 217225
         # current = 8857668
         close_pages = set()
         checked_pages = set()
         while True:
+            data_from_db = await get_page(db, {"id": current})
+            if data_from_db is not None:
+                logging.info(
+                    f"page {current} with title {data_from_db['title']} already exists in DB"
+                )
 
-            pages = asyncio.create_task(get_links_from_page(pageids=current))
-            page = asyncio.create_task(get_page_data(pageids=current))
-            pages = await pages
-            page = await page
-            page["id"] = page.pop("pageid", None)
+                pages = data_from_db["connected"]
+            else:
+                pages = asyncio.create_task(get_links_from_page(pageids=current))
 
-            page["connected"] = pages
-            waiting_insert = asyncio.create_task(insert(db, "pages", "page", page))
+                pages = await pages
+                pages_list.append((current, pages))
+
             checked_pages.add(current)
 
             if len(pages) == 0:
                 if len(close_pages) == 0:
-                    await waiting_insert
+
                     logging.info("cannot find more connected pages")
                     break
                 else:
@@ -54,7 +88,7 @@ async def main():
                         current = close_pages.pop()
                         logging.info(f"choose {current} for BFS")
                         if len(checked_pages) == 0:
-                            await waiting_insert
+
                             logging.info("cannot find more connected pages")
                             break
 
@@ -65,7 +99,6 @@ async def main():
                     pages.remove(current)
                     if len(pages) == 0:
 
-                        await waiting_insert
                         logging.info("cannot find more connected pages")
                         break
 
@@ -76,7 +109,7 @@ async def main():
                     pages.remove(current)
                     if len(pages) == 0:
                         if len(close_pages) == 0:
-                            await waiting_insert
+
                             logging.info("cannot find more connected pages")
                             break
                         else:
@@ -84,7 +117,7 @@ async def main():
                                 current = close_pages.pop()
                                 logging.info(f"choose {current} for BFS")
                                 if len(close_pages) == 0:
-                                    await waiting_insert
+
                                     logging.info("cannot find more connected pages")
                                     break
 
@@ -93,7 +126,7 @@ async def main():
                     current = close_pages.pop()
                     logging.info(f"choose {current} for BFS")
                     if len(pages) == 0:
-                        await waiting_insert
+
                         logging.info("cannot find more connected pages")
                         break
                     else:
@@ -102,33 +135,41 @@ async def main():
                             logging.info(f"choose {current} for DFS")
                             pages.remove(current)
                             if len(pages) == 0:
-                                await waiting_insert
+
                                 logging.info("cannot find more connected pages")
                                 break
 
             close_pages.update(pages)
-            await waiting_insert
 
     except Exception as e:
-        logging.exception(f"Failed with error {e}")
+
+        logging.exception(f"Failed in parsing thread with error {e}")
     finally:
+        pages_list.append((-1, None))
         if db:
             await db.close()
 
 
-async def get():
-    db = None
+async def main():
+
     try:
-        db = await c.connect()
-        row = await db.run_simple_query(
-            Query("""select * from pages.page where id = ?""", UInt(1))
+        pages_list = []
+        input_thread = Thread(
+            target=asyncio.run,
+            args=[insert_page(pages_list)],
+        )
+        parse_thread = Thread(
+            target=asyncio.run,
+            args=[parse_pages(pages_list)],
         )
 
+        input_thread.start()
+        parse_thread.start()
+
+        input_thread.join()
+        parse_thread.join()
     except Exception as e:
-        print("Failed with error", e)
-    finally:
-        if db:
-            await db.close()
+        logging.exception(f"Failed in main with error {e}")
 
 
 if __name__ == "__main__":
