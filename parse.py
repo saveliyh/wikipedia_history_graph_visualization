@@ -14,17 +14,7 @@ async def get_page_data(**kwargs):
         }
         params.update(kwargs)
         i = 0
-        # while True:
-        #     try:
-        #         i += 1
-        #         response = re.get(
-        #             url="https://en.wikipedia.org/w/api.php",
-        #             params=params,
-        #         ).json()
-        #         break
-        #     except Exception:
-        #         logger.warning(f"Failed to get page data made {i} attempts")
-        i = 0
+
         while True:
             try:
                 i += 1
@@ -58,6 +48,7 @@ async def get_links_from_page(**kwargs):
             "action": "query",
             "format": "json",
             "generator": "links",
+            "gpllimit": "100",
         }
         params.update(kwargs)
         connected_pages = []
