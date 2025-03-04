@@ -5,17 +5,19 @@ import json
 logger = logging.getLogger(__name__)
 
 
+def prepare_data(values):
+    for value in values:
+        if isinstance(value, list):
+            yield from prepare_data(value)
+        elif isinstance(value, int):
+            yield UInt(value)
+        elif isinstance(value, str):
+            yield value.encode("utf-8")
+        else:
+            yield value
+
+
 async def insert(db: Config, space: str, model: str, data: dict):
-    def prepare_data(values):
-        for value in values:
-            if isinstance(value, list):
-                yield from prepare_data(value)
-            elif isinstance(value, int):
-                yield UInt(value)
-            elif isinstance(value, str):
-                yield value.encode("utf-8")
-            else:
-                yield value
 
     string = "".join(
         [
@@ -61,8 +63,22 @@ async def insert(db: Config, space: str, model: str, data: dict):
         logger.info(f"Inserted {model} with title {data['title']}")
 
 
-async def select(db: Config, rows: list[str], **kwargs) -> dict:
-    pass
+async def get_page(db: Config, params: dict) -> dict | None:
+
+    string = "select * from pages.page where " + " and ".join(
+        [f"{key} = ?" for key in params.keys()]
+    )
+    query = Query(string, *prepare_data([value for value in params.values()]))
+    row = (await db.run_simple_query(query)).row()
+    if row is None:
+        return None
+    dict_result = dict()
+    dict_result["id"], dict_result["title"], dict_result["connected"] = map(
+        lambda x: x.data(), row.columns
+    )
+    dict_result["connected"] = list(map(lambda x: x.data(), dict_result["connected"]))
+    dict_result["title"] = dict_result["title"].decode("utf-8")
+    return dict_result
 
 
 async def init(db: Config, space: str, model: str, columns: dict):
