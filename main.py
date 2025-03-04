@@ -2,7 +2,7 @@ from parse import get_links_from_page, get_page_data
 from random import choice, random
 import logging
 import asyncio
-from skytable_py import Config, Query, UInt
+from skytable_py import Config
 from db import insert, init, get_page
 from threading import Thread
 

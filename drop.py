@@ -1,4 +1,4 @@
-from skytable_py import Config, Query, UInt
+from skytable_py import Config, Query
 import asyncio
 
 c = Config("root", "77a23dea-64f9-48", host="localhost", port=2003)
