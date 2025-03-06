@@ -1,0 +1,13 @@
+system:
+  mode: prod
+  rs_window: 180
+
+auth:
+  plugin: pwd
+  # replace with your root password of choice
+  root_pass: dev_password_will_be_changed
+
+endpoints:
+  insecure:
+    host: 127.0.0.1
+    port: 2003

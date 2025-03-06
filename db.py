@@ -78,6 +78,9 @@ async def get_page(db: Config, params: dict) -> dict | None:
     )
     dict_result["connected"] = list(map(lambda x: x.data(), dict_result["connected"]))
     dict_result["title"] = dict_result["title"].decode("utf-8")
+    logger.debug(
+        f"Got page data with pageid {dict_result['id']} and title {dict_result['title']}"
+    )
     return dict_result
 
 

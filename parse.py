@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 async def get_page_data(**kwargs):
     async with ClientSession() as session:
-        logger.info(f"Getting page data with params {kwargs}")
+        logger.debug(f"Getting page data with params {kwargs}")
         params = {
             "action": "query",
             "format": "json",
@@ -42,7 +42,7 @@ async def get_page_data(**kwargs):
 
 
 async def get_links_from_page(**kwargs):
-    logger.info(f"Getting links from page with params {kwargs}")
+    logger.debug(f"Getting links from page with params {kwargs}")
     async with ClientSession() as session:
         params = {
             "action": "query",

@@ -12,8 +12,8 @@ logging.basicConfig(
     filemode="w",
     format="%(asctime)s %(levelname)s %(message)s",
 )
-
-c = Config("root", "77a23dea-64f9-48", host="localhost", port=2003)
+# TODO: Make secure
+c = Config("root", "dev_password_will_be_changed", host="localhost", port=2003)
 
 
 async def insert_page(pages_list: list[tuple[int, dict]]):
@@ -28,7 +28,7 @@ async def insert_page(pages_list: list[tuple[int, dict]]):
         )
         while True:
             if len(pages_list) == 0:
-                await asyncio.sleep(30)
+                await asyncio.sleep(10)
                 continue
             current, pages = pages_list.pop()
             if current == -1:
@@ -86,7 +86,7 @@ async def parse_pages(pages_list: list[tuple[int, dict]]):
                 else:
                     while current in checked_pages:
                         current = close_pages.pop()
-                        logging.info(f"choose {current} for BFS")
+                        logging.debug(f"choose {current} for BFS")
                         if len(checked_pages) == 0:
 
                             logging.info("cannot find more connected pages")
@@ -95,7 +95,7 @@ async def parse_pages(pages_list: list[tuple[int, dict]]):
             elif len(close_pages) == 0:
                 while current in checked_pages:
                     current = choice(pages)
-                    logging.info(f"choose {current} for DFS")
+                    logging.debug(f"choose {current} for DFS")
                     pages.remove(current)
                     if len(pages) == 0:
 
@@ -105,7 +105,7 @@ async def parse_pages(pages_list: list[tuple[int, dict]]):
             elif random() < balance:
                 while current in checked_pages:
                     current = choice(pages)
-                    logging.info(f"choose {current} for DFS")
+                    logging.debug(f"choose {current} for DFS")
                     pages.remove(current)
                     if len(pages) == 0:
                         if len(close_pages) == 0:
@@ -115,7 +115,7 @@ async def parse_pages(pages_list: list[tuple[int, dict]]):
                         else:
                             while current in checked_pages:
                                 current = close_pages.pop()
-                                logging.info(f"choose {current} for BFS")
+                                logging.debug(f"choose {current} for BFS")
                                 if len(close_pages) == 0:
 
                                     logging.info("cannot find more connected pages")
@@ -124,7 +124,7 @@ async def parse_pages(pages_list: list[tuple[int, dict]]):
             else:
                 while current in checked_pages:
                     current = close_pages.pop()
-                    logging.info(f"choose {current} for BFS")
+                    logging.debug(f"choose {current} for BFS")
                     if len(pages) == 0:
 
                         logging.info("cannot find more connected pages")
@@ -132,7 +132,7 @@ async def parse_pages(pages_list: list[tuple[int, dict]]):
                     else:
                         while current in checked_pages:
                             current = choice(pages)
-                            logging.info(f"choose {current} for DFS")
+                            logging.debug(f"choose {current} for DFS")
                             pages.remove(current)
                             if len(pages) == 0:
 
@@ -170,6 +170,8 @@ async def main():
         parse_thread.join()
     except Exception as e:
         logging.exception(f"Failed in main with error {e}")
+    finally:
+        pages_list.append((-1, None))
 
 
 if __name__ == "__main__":
