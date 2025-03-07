@@ -5,3 +5,5 @@ data
 .sky_pid
 gns.db-tlog
 log.log
+backup
+backups
