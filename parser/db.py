@@ -58,9 +58,15 @@ async def insert(db: Config, space: str, model: str, data: dict):
             logger.error(json.dumps(data, indent=4))
             raise AssertionError(result.error())
         else:
-            logger.info(f"{model} with title {data['title']} already exists")
+            if "title" in data.keys():
+                logger.info(f"{model} with title {data['title']} already exists")
+            else:
+                logger.info(f"{model} already exists")
     else:
-        logger.info(f"Inserted {model} with title {data['title']}")
+        if "title" in data.keys():
+            logger.info(f"Inserted {model} with title {data['title']}")
+        else:
+            logger.info(f"Inserted {model}")
 
 
 async def get_page(db: Config, params: dict) -> dict | None:
@@ -82,6 +88,36 @@ async def get_page(db: Config, params: dict) -> dict | None:
         f"Got page data with pageid {dict_result['id']} and title {dict_result['title']}"
     )
     return dict_result
+
+
+async def get_metadata(db: Config) -> set[int]:
+    string = "select pages from pages.metadata where id = ?"
+    query = Query(string, UInt(0))
+    row = await db.run_simple_query(query)
+    if row.error() == 111:
+        return set()
+    return set(map(lambda x: x.int(), row.row().columns[0].data()))
+
+
+async def sync_metadata(db: Config, checked_pages: set[int]):
+    pages_in_db = await get_metadata(db)
+    logger.info(
+        f"syncing metadata with {len(checked_pages)} total pages and {len(pages_in_db)} pages in db"
+    )
+
+    for page in checked_pages.difference(pages_in_db):
+        string = "update pages.metadata set pages += ? where id = ?"
+        query = Query(string, UInt(page), UInt(0))
+
+        result = await db.run_simple_query(query)
+
+        if result.error():
+
+            logger.error("Failed to add update metadata")
+            logger.error(string)
+            raise AssertionError(result.error())
+        else:
+            logger.info("Metadata updated")
 
 
 async def init(db: Config, space: str, model: str, columns: dict):
@@ -107,6 +143,7 @@ async def init(db: Config, space: str, model: str, columns: dict):
             + ")"
         )
     )
+    # print(res.value())
     if res.value().data():
         logger.info(f"Model {model} created")
     else:

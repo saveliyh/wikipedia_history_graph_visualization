@@ -3,7 +3,7 @@ from random import choice, random
 import logging
 import asyncio
 from skytable_py import Config
-from db import insert, init, get_page
+from db import insert, init, get_page, sync_metadata
 from threading import Thread
 
 logging.basicConfig(
@@ -26,6 +26,13 @@ async def insert_page(pages_list: list[tuple[int, dict]]):
             "page",
             {"id": "uint64", "title": "binary", "connected": "list {type: uint64}"},
         )
+        await init(
+            db,
+            "pages",
+            "metadata",
+            {"id": "uint8", "pages": "list {type: uint64}"},
+        )
+        await insert(db, "pages", "metadata", {"id": 0, "pages": [217225]})
         while True:
             if len(pages_list) == 0:
                 await asyncio.sleep(10)
@@ -46,6 +53,20 @@ async def insert_page(pages_list: list[tuple[int, dict]]):
             await db.close()
 
 
+async def run_tasks(tasks: list, pages_list: list[tuple[int, dict]], close_pages: set):
+    pages = []
+    for current, task in tasks:
+        pages = await task
+        pages_list.append((current, pages))
+        close_pages.update(pages)
+
+    return pages
+
+
+async def get_data(pages_list: list[tuple[int, dict]]):
+    return pages_list
+
+
 async def parse_pages(pages_list: list[tuple[int, dict]]):
     db = None
     try:
@@ -56,53 +77,53 @@ async def parse_pages(pages_list: list[tuple[int, dict]]):
             "page",
             {"id": "uint64", "title": "binary", "connected": "list {type: uint64}"},
         )
-        balance = 0.7
+
+        await init(
+            db,
+            "pages",
+            "metadata",
+            {"id": "uint8", "pages": "list {type: uint64}"},
+        )
+        await insert(db, "pages", "metadata", {"id": 0, "pages": [217225]})
+        balance = 0.1
         # start with Main Page
         current = 217225
         # current = 8857668
         close_pages = set()
         checked_pages = set()
+        calls = []
         while True:
+            if len(calls) >= 100:
+                await run_tasks(calls, pages_list, close_pages)
             data_from_db = await get_page(db, {"id": current})
             if data_from_db is not None:
                 logging.info(
                     f"page {current} with title {data_from_db['title']} already exists in DB"
                 )
 
-                pages = data_from_db["connected"]
+                pages = asyncio.create_task(get_data(data_from_db["connected"]))
+
             else:
                 pages = asyncio.create_task(get_links_from_page(pageids=current))
 
-                pages = await pages
-                pages_list.append((current, pages))
+            calls.append((current, pages))
 
             checked_pages.add(current)
+            await sync_metadata(db, checked_pages)
 
-            if len(pages) == 0:
-                if len(close_pages) == 0:
-
-                    logging.info("cannot find more connected pages")
-                    break
-                else:
-                    while current in checked_pages:
-                        current = close_pages.pop()
-                        logging.debug(f"choose {current} for BFS")
-                        if len(checked_pages) == 0:
-
-                            logging.info("cannot find more connected pages")
-                            break
-
-            elif len(close_pages) == 0:
+            if len(close_pages) == 0:
+                pages = await run_tasks(calls, pages_list, close_pages)
                 while current in checked_pages:
-                    current = choice(pages)
-                    logging.debug(f"choose {current} for DFS")
-                    pages.remove(current)
                     if len(pages) == 0:
 
                         logging.info("cannot find more connected pages")
-                        break
+                        return
+                    current = choice(pages)
+                    logging.debug(f"choose {current} for DFS")
+                    pages.remove(current)
 
             elif random() < balance:
+                pages = await run_tasks(calls, pages_list, close_pages)
                 while current in checked_pages:
                     current = choice(pages)
                     logging.debug(f"choose {current} for DFS")
@@ -111,7 +132,7 @@ async def parse_pages(pages_list: list[tuple[int, dict]]):
                         if len(close_pages) == 0:
 
                             logging.info("cannot find more connected pages")
-                            break
+                            return
                         else:
                             while current in checked_pages:
                                 current = close_pages.pop()
@@ -125,21 +146,22 @@ async def parse_pages(pages_list: list[tuple[int, dict]]):
                 while current in checked_pages:
                     current = close_pages.pop()
                     logging.debug(f"choose {current} for BFS")
-                    if len(pages) == 0:
+                    if len(close_pages) == 0:
+                        pages = await run_tasks(calls, pages_list, close_pages)
+                        if len(pages) == 0:
 
-                        logging.info("cannot find more connected pages")
-                        break
-                    else:
-                        while current in checked_pages:
-                            current = choice(pages)
-                            logging.debug(f"choose {current} for DFS")
-                            pages.remove(current)
-                            if len(pages) == 0:
+                            logging.info("cannot find more connected pages")
+                            return
+                        else:
+                            while current in checked_pages:
+                                pages = await run_tasks(calls, pages_list, close_pages)
+                                current = choice(pages)
+                                logging.debug(f"choose {current} for DFS")
+                                pages.remove(current)
+                                if len(pages) == 0:
 
-                                logging.info("cannot find more connected pages")
-                                break
-
-            close_pages.update(pages)
+                                    logging.info("cannot find more connected pages")
+                                    break
 
     except Exception as e:
 
