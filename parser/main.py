@@ -9,7 +9,7 @@ from threading import Thread
 logging.basicConfig(
     level=logging.INFO,
     filename="log.log",
-    filemode="w",
+    filemode="a",
     format="%(asctime)s %(levelname)s %(message)s",
 )
 # TODO: Make secure
@@ -154,20 +154,24 @@ async def main():
 
     try:
         pages_list = []
-        input_thread = Thread(
-            target=asyncio.run,
-            args=[insert_page(pages_list)],
-        )
-        parse_thread = Thread(
-            target=asyncio.run,
-            args=[parse_pages(pages_list)],
-        )
+        # input_thread = Thread(
+        #     target=asyncio.run,
+        #     args=[insert_page(pages_list)],
+        # )
+        # parse_thread = Thread(
+        #     target=asyncio.run,
+        #     args=[parse_pages(pages_list)],
+        # )
+        insert_task = asyncio.create_task(insert_page(pages_list))
+        parse_task = asyncio.create_task(parse_pages(pages_list))
+        await insert_task
+        await parse_task
 
-        input_thread.start()
-        parse_thread.start()
+        # input_thread.start()
+        # parse_thread.start()
 
-        input_thread.join()
-        parse_thread.join()
+        # input_thread.join()
+        # parse_thread.join()
     except Exception as e:
         logging.exception(f"Failed in main with error {e}")
     finally:

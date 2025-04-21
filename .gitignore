@@ -7,3 +7,5 @@ gns.db-tlog
 log.log
 backup
 backups
+api/target
+api/Cargo.lock
